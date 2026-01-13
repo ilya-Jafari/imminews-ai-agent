@@ -3,12 +3,12 @@ import feedparser
 import json
 import os
 import requests
-import re # برای تمیز کردن خروجی جیسون
+import re 
+from dotenv import load_dotenv
 
-# ==========================================
-# 🔑 کلید API خودت رو اینجا بزار
-GEMINI_API_KEY = "AIzaSyBuiM0z6SlJpA_L1B_tdf9-8cFYJOYklS4".strip()
-# ==========================================
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY").strip()
 
 HISTORY_FILE = "history.txt"
 genai.configure(api_key=GEMINI_API_KEY)
