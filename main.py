@@ -2,26 +2,26 @@ import os
 import feedparser
 import json
 import requests
+import random
+import time
 from google import genai
 from dotenv import load_dotenv
 
-# ۱. تنظیمات و بارگذاری متغیرهای محیطی
+# ۱. تنظیمات و بارگذاری
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
 HISTORY_FILE = "history.txt"
 
-# بررسی امنیت تنظیمات
 if not all([GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    print("❌ ERROR: Missing configuration in .env file!")
+    print("❌ ERROR: Missing config! Check .env file.")
     exit()
 
-# تعریف کلاینت مدرن گوگل (نسخه ۲۰۲۶)
 client = genai.Client(api_key=GEMINI_API_KEY)
-print("✅ System initialized: Gemini AI & Telegram ready.")
+print("✅ System initialized. Using Stable Model Alias.")
 
-# --- توابع مدیریت تاریخچه ---
+# --- مدیریت تاریخچه ---
 def load_history():
     if not os.path.exists(HISTORY_FILE):
         return []
@@ -32,106 +32,111 @@ def save_to_history(link):
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(f"{link}\n")
 
-# --- ۱. تابع دریافت خبر (Google News RSS) ---
+# --- ۱. تابع دریافت خبر ---
 def get_news():
-    print("🌍 Monitoring news sources...")
-    rss_url = "https://news.google.com/rss/search?q=Europe+immigration+visa+rules&hl=en-US&gl=US&ceid=US:en"
-    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+    print("🌍 Scanning European updates...")
+    queries = [
+        "Europe immigration visa updates",
+        "real estate investment Europe 2026",
+        "registering a company in Europe non-EU",
+        "best startup hubs in Europe 2026",
+        "Schengen visa rules 2026"
+    ]
+    
+    selected_query = random.choice(queries)
+    print(f"🔍 Topic: {selected_query}")
+    
+    rss_url = f"https://news.google.com/rss/search?q={selected_query}+when:1d&hl=en-US&gl=US&ceid=US:en"
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
         response = requests.get(rss_url, headers=headers, timeout=10)
         feed = feedparser.parse(response.content)
         if feed.entries:
-            news_item = feed.entries[0]
-            print(f"✅ Latest News Found: {news_item.title}")
-            return {"title": news_item.title, "link": news_item.link}
+            sent_links = load_history()
+            for entry in feed.entries[:10]:
+                if entry.link not in sent_links:
+                    return {"title": entry.title, "link": entry.link, "topic": selected_query}
         return None
     except Exception as e:
         print(f"❌ RSS Error: {e}")
         return None
 
-# --- ۲. تابع تولید محتوا با هوش مصنوعی (Gemini) ---
+# --- ۲. تابع تولید محتوا (با اصلاح نام مدل و Retry) ---
 def generate_content(news_item):
-    print("🤖 AI is drafting social media posts...")
+    print(f"🤖 AI is analyzing with Gemini...")
     
     prompt = f"""
-    You are a professional immigration news analyst.
+    You are a professional social media manager.
     News: "{news_item['title']}"
+    Topic: {news_item['topic']}
     
-    Task:
-    1. Summarize for Twitter (max 250 chars, with hashtags).
-    2. Write a professional LinkedIn post.
-    
+    Task: Write a Twitter post and a LinkedIn post.
     Output ONLY valid JSON:
     {{
-        "twitter": "tweet text",
-        "linkedin": "linkedin text"
+        "twitter": "text",
+        "linkedin": "text"
     }}
     """
     
-    try:
-        response = client.models.generate_content(
-            model="gemini-flash-latest", 
-            contents=prompt
-        )
-        
-        # پاکسازی و استخراج JSON
-        clean_text = response.text.strip()
-        if "```json" in clean_text:
-            clean_text = clean_text.split("```json")[1].split("```")[0]
-        elif "```" in clean_text:
-            clean_text = clean_text.split("```")[1].split("```")[0]
+    for attempt in range(3):
+        try:
+            # استفاده از نام مستعار پایدار که در لیست شما هم بود
+            response = client.models.generate_content(
+                model="gemini-flash-latest", 
+                contents=prompt
+            )
             
-        return json.loads(clean_text)
-    except Exception as e:
-        print(f"❌ AI Generation Error: {e}")
-        return None
+            clean_text = response.text.strip()
+            if "```json" in clean_text:
+                clean_text = clean_text.split("```json")[1].split("```")[0]
+            elif "```" in clean_text:
+                clean_text = clean_text.split("```")[1].split("```")[0]
+                
+            return json.loads(clean_text)
+            
+        except Exception as e:
+            if "429" in str(e) or "503" in str(e):
+                print(f"⚠️ Server busy or limit hit, retrying in 15s... ({attempt+1}/3)")
+                time.sleep(15)
+            else:
+                print(f"❌ AI Error: {e}")
+                break
+    return None
 
-# --- ۳. تابع ارسال به تلگرام (نسخه اصلاح شده با HTML) ---
-def send_telegram_notification(content, link):
+# --- ۳. ارسال به تلگرام ---
+def send_telegram(content, news_item):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    topic_header = news_item['topic'].title()
     
-    # استفاده از تگ‌های HTML برای پایداری بیشتر در برابر کاراکترهای خاص
     message_text = (
-        f"<b>📢 New Immigration Update</b>\n\n"
-        f"<b>🐦 Twitter Draft:</b>\n{content.get('twitter')}\n\n"
-        f"<b>💼 LinkedIn Draft:</b>\n{content.get('linkedin')}\n\n"
-        f'<a href="{link}">🔗 Original Source</a>'
+        f"<b>📢 Topic: {topic_header}</b>\n\n"
+        f"<b>🐦 Twitter:</b>\n{content.get('twitter')}\n\n"
+        f"<b>💼 LinkedIn:</b>\n{content.get('linkedin')}\n\n"
+        f'<a href="{news_item["link"]}">🔗 Source</a>'
     )
     
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message_text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message_text, "parse_mode": "HTML"}
     
     try:
         res = requests.post(url, json=payload)
         if res.status_code == 200:
-            print("🚀 Notification successfully sent to Telegram!")
+            print("🚀 Success! Sent to Telegram.")
         else:
-            print(f"⚠️ Telegram API Error: {res.status_code} - {res.text}")
+            print(f"⚠️ Telegram Error: {res.text}")
     except Exception as e:
-        print(f"❌ Telegram Network Error: {e}")
+        print(f"❌ Connection Error: {e}")
 
-# --- بدنه اصلی اجرا ---
+# --- اجرا ---
 if __name__ == "__main__":
-    sent_links = load_history()
     news = get_news()
-    
     if news:
-        if news['link'] in sent_links:
-            print("⛔ Duplicate news. Skipping...")
+        ai_result = generate_content(news)
+        if ai_result:
+            send_telegram(ai_result, news)
+            save_to_history(news['link'])
+            print("💾 Done.")
         else:
-            ai_result = generate_content(news)
-            if ai_result:
-                # ارسال به تلگرام
-                send_telegram_notification(ai_result, news['link'])
-                
-                # ذخیره در تاریخچه
-                save_to_history(news['link'])
-                print("💾 History updated.")
-            else:
-                print("❌ AI failed to generate content.")
+            print("❌ AI failed.")
     else:
-        print("😴 No new news found.")
+        print("😴 No news.")
