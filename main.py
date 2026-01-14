@@ -13,7 +13,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY").strip()
 HISTORY_FILE = "history.txt"
 genai.configure(api_key=GEMINI_API_KEY)
 
-# ✅ استفاده از مدل قدرتمند و سریع 2.0 Flash که در لیست شما بود
+
 model = genai.GenerativeModel('models/gemini-2.0-flash')
 
 # --- توابع حافظه ---

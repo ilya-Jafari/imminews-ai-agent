@@ -21,5 +21,9 @@
 2. Add your **Gemini API Key** in the script.
 3. Run the agent: `python main.py`
 
+## ⚠️ Setup Environment Variables
+Before running the script, create a `.env` file in the root directory and add your Gemini API Key:
+`GEMINI_API_KEY=your_api_key_here`
+
 ---
 Developed with ❤️ by Ilya Jafari
