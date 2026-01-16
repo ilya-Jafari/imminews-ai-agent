@@ -34,7 +34,9 @@ An intelligent, automated agent leveraging **Google's Gemini AI** to track the l
 ---
 ## ⚙️ Project Preview
 
-![Bot Screenshot](assets/screenshot.png)
+<p align="center">
+  <img src="assets/screenshot.png" width="70%" alt="Bot Screenshot">
+</p>
 ---
 
 ## 🚀 Setup & Usage
