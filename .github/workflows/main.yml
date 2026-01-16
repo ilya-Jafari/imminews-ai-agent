@@ -1,0 +1,37 @@
+name: Migration Bot Auto-Run
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # هر ۶ ساعت یک‌بار خودکار اجرا می‌شود
+  workflow_dispatch: # اجازه می‌دهد دستی هم از سایت گیت‌هاب اجرا کنی
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install google-genai feedparser requests python-dotenv
+
+      - name: Run Migration Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Commit and Push History
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add history.txt
+          git commit -m "Update history [skip ci]" || exit 0
+          git push
