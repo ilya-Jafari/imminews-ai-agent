@@ -26,11 +26,15 @@ An intelligent, automated agent leveraging **Google's Gemini AI** to track the l
 
 ## ⚙️ Project Structure
 
+
 -   `main.py`: The core script containing the logic for fetching news, AI processing, and sending notifications.
 -   `.github/workflows/main.yml`: Configuration for GitHub Actions to run the bot automatically every 6 hours.
 -   `history.txt`: A simple, flat-file database to store links of already processed news.
 -   `.env`: (Local use only) Stores sensitive API keys and tokens.
+---
+## ⚙️ Project Preview
 
+![Bot Screenshot](assets/screenshot.png)
 ---
 
 ## 🚀 Setup & Usage
