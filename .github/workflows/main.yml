@@ -2,8 +2,8 @@ name: Migration Bot Auto-Run
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # هر ۶ ساعت یک‌بار خودکار اجرا می‌شود
-  workflow_dispatch: # اجازه می‌دهد دستی هم از سایت گیت‌هاب اجرا کنی
+    - cron: '0 */6 * * *' # هر ۶ ساعت یک‌بار
+  workflow_dispatch: # قابلیت اجرای دستی
 
 jobs:
   build:
@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-genai feedparser requests python-dotenv tweepy
+          pip install --upgrade google-genai feedparser requests python-dotenv tweepy
 
       - name: Run Migration Bot
         env:
@@ -32,10 +32,10 @@ jobs:
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: python main.py
 
-      - name: Commit and Push History
+      - name: Commit and push history update
         run: |
           git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
+          git config --global user.email "actions@github.com"
           git add history.txt
           git commit -m "Update history [skip ci]" || exit 0
           git push

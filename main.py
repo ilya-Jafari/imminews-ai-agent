@@ -5,27 +5,23 @@ import tweepy
 from google import genai
 from dotenv import load_dotenv
 
-# بارگذاری متغیرهای محیطی (برای اجرای لوکال)
+# بارگذاری متغیرها برای اجرای لوکال
 load_dotenv()
 
-# --- تنظیمات کلیدها (این‌ها از فایل .env یا GitHub Secrets خوانده می‌شوند) ---
+# تنظیمات متغیرهای محیطی
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
-# کلیدهای توییتر (X)
 X_API_KEY = os.environ.get("X_API_KEY")
 X_API_SECRET = os.environ.get("X_API_SECRET")
 X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_SECRET = os.environ.get("X_ACCESS_SECRET")
 
-# --- ۱. دریافت اخبار از RSS ---
 def get_news():
-    print("🌍 Scanning for updates...")
+    print("🌍 Scanning Google News RSS...")
     rss_url = "https://news.google.com/rss/search?q=schengen+visa+rules+2026+OR+european+residency+investment&hl=en-US&gl=US&ceid=US:en"
     feed = feedparser.parse(rss_url)
     
-    # خواندن تاریخچه برای جلوگیری از تکرار
     if os.path.exists("history.txt"):
         with open("history.txt", "r") as f:
             history = f.read().splitlines()
@@ -34,29 +30,28 @@ def get_news():
 
     for entry in feed.entries:
         if entry.link not in history:
-            return entry # اولین خبر جدید را برمی‌گرداند
+            return entry
     return None
 
-# --- ۲. پردازش خبر با هوش مصنوعی Gemini ---
 def generate_content(news_entry):
-    print("🤖 AI is analyzing with Gemini...")
+    print("🤖 AI is analyzing with Gemini 2.0 Flash...")
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = f"""
     Analyze this news: {news_entry.title}
     Link: {news_entry.link}
     
-    Task: Create a professional summary for immigration and investment interests.
-    Output MUST be in this exact format:
-    TELEGRAM: (A catchy title and 3 bullet points in Persian)
-    X_POST: (A short, engaging English tweet with hashtags, max 240 chars)
+    Task: Create a summary for an audience interested in European immigration.
+    Output format:
+    TELEGRAM: (Persian summary with emojis)
+    X_POST: (Short English tweet with hashtags, max 240 characters)
     """
     
     try:
-        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        # استفاده از مدل gemini-2.0-flash برای پایداری در سال 2026
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
         text = response.text
         
-        # جدا کردن محتوای تلگرام و توییتر
         parts = text.split("X_POST:")
         telegram_part = parts[0].replace("TELEGRAM:", "").strip()
         x_part = parts[1].strip() if len(parts) > 1 else ""
@@ -66,11 +61,9 @@ def generate_content(news_entry):
         print(f"❌ Gemini Error: {e}")
         return None
 
-# --- ۳. ارسال به توییتر (X) ---
 def post_to_x(tweet_text):
     print("🐦 Posting to X (Twitter)...")
     try:
-        # استفاده از Tweepy برای ارسال پست
         client_x = tweepy.Client(
             consumer_key=X_API_KEY,
             consumer_secret=X_API_SECRET,
@@ -82,33 +75,25 @@ def post_to_x(tweet_text):
     except Exception as e:
         print(f"❌ X API Error: {e}")
 
-# --- ۴. ارسال به تلگرام ---
 def send_telegram(text, link):
     print("📢 Sending to Telegram...")
     message = f"{text}\n\n🔗 Source: {link}"
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"})
+    requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
 
-# --- ۵. ذخیره در تاریخچه ---
 def save_history(link):
     with open("history.txt", "a") as f:
         f.write(link + "\n")
 
-# --- اجرای اصلی ---
 if __name__ == "__main__":
     news = get_news()
     if news:
         ai_content = generate_content(news)
         if ai_content:
-            # ارسال به تلگرام
             send_telegram(ai_content['telegram'], news.link)
-            
-            # ارسال به توییتر
             if ai_content['x']:
                 post_to_x(ai_content['x'])
-            
-            # ذخیره لینک
             save_history(news.link)
-            print("💾 Done! Everything synchronized.")
+            print("💾 Successfully processed and saved.")
     else:
-        print("☕ No new news found.")
+        print("☕ No new articles found.")
