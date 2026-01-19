@@ -34,32 +34,41 @@ def get_news():
     return None
 
 def generate_content(news_entry):
-    print("🤖 AI is analyzing with Gemini 2.0 Flash...")
+    print("🤖 AI is analyzing with Gemini 1.5 Flash...")
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = f"""
     Analyze this news: {news_entry.title}
     Link: {news_entry.link}
     
-    Task: Create a summary for an audience interested in European immigration.
-    Output format:
+    Task: Create a professional summary for immigration and investment interests.
+    Output MUST be in this exact format:
     TELEGRAM: (Persian summary with emojis)
-    X_POST: (Short English tweet with hashtags, max 240 characters)
+    X_POST: (Short English tweet with hashtags, max 240 chars)
     """
     
     try:
-        # استفاده از مدل gemini-1.5-flash برای پایداری در سال 2026
-        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        # استفاده از نام دقیق مدل برای جلوگیری از ارور 404
+        response = client.models.generate_content(
+            model="gemini-1.5-flash", 
+            contents=prompt
+        )
         text = response.text
         
-        parts = text.split("X_POST:")
-        telegram_part = parts[0].replace("TELEGRAM:", "").strip()
-        x_part = parts[1].strip() if len(parts) > 1 else ""
-        
+        # پردازش متن خروجی
+        if "X_POST:" in text:
+            parts = text.split("X_POST:")
+            telegram_part = parts[0].replace("TELEGRAM:", "").strip()
+            x_part = parts[1].strip()
+        else:
+            telegram_part = text
+            x_part = ""
+            
         return {"telegram": telegram_part, "x": x_part}
     except Exception as e:
         print(f"❌ Gemini Error: {e}")
         return None
+    
 
 def post_to_x(tweet_text):
     print("🐦 Posting to X (Twitter)...")
