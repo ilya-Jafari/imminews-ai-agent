@@ -48,8 +48,8 @@ def generate_content(news_entry):
     """
     
     try:
-        # استفاده از مدل gemini-2.0-flash برای پایداری در سال 2026
-        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        # استفاده از مدل gemini-1.5-flash برای پایداری در سال 2026
+        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
         text = response.text
         
         parts = text.split("X_POST:")
