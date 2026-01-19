@@ -1,142 +1,114 @@
 import os
 import feedparser
-import json
 import requests
-import random
-import time
+import tweepy
 from google import genai
 from dotenv import load_dotenv
 
-# ۱. تنظیمات و بارگذاری
+# بارگذاری متغیرهای محیطی (برای اجرای لوکال)
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-HISTORY_FILE = "history.txt"
 
-if not all([GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
-    print("❌ ERROR: Missing config! Check .env file.")
-    exit()
+# --- تنظیمات کلیدها (این‌ها از فایل .env یا GitHub Secrets خوانده می‌شوند) ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
-print("✅ System initialized. Using Stable Model Alias.")
+# کلیدهای توییتر (X)
+X_API_KEY = os.environ.get("X_API_KEY")
+X_API_SECRET = os.environ.get("X_API_SECRET")
+X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
+X_ACCESS_SECRET = os.environ.get("X_ACCESS_SECRET")
 
-# --- مدیریت تاریخچه ---
-def load_history():
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f.readlines()]
-
-def save_to_history(link):
-    with open(HISTORY_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{link}\n")
-
-# --- ۱. تابع دریافت خبر ---
+# --- ۱. دریافت اخبار از RSS ---
 def get_news():
-    print("🌍 Scanning European updates...")
-    queries = [
-        "Europe immigration visa updates",
-        "real estate investment Europe 2026",
-        "registering a company in Europe non-EU",
-        "best startup hubs in Europe 2026",
-        "Schengen visa rules 2026"
-    ]
+    print("🌍 Scanning for updates...")
+    rss_url = "https://news.google.com/rss/search?q=schengen+visa+rules+2026+OR+european+residency+investment&hl=en-US&gl=US&ceid=US:en"
+    feed = feedparser.parse(rss_url)
     
-    selected_query = random.choice(queries)
-    print(f"🔍 Topic: {selected_query}")
-    
-    rss_url = f"https://news.google.com/rss/search?q={selected_query}+when:1d&hl=en-US&gl=US&ceid=US:en"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # خواندن تاریخچه برای جلوگیری از تکرار
+    if os.path.exists("history.txt"):
+        with open("history.txt", "r") as f:
+            history = f.read().splitlines()
+    else:
+        history = []
 
-    try:
-        response = requests.get(rss_url, headers=headers, timeout=10)
-        feed = feedparser.parse(response.content)
-        if feed.entries:
-            sent_links = load_history()
-            for entry in feed.entries[:10]:
-                if entry.link not in sent_links:
-                    return {"title": entry.title, "link": entry.link, "topic": selected_query}
-        return None
-    except Exception as e:
-        print(f"❌ RSS Error: {e}")
-        return None
-
-# --- ۲. تابع تولید محتوا (با اصلاح نام مدل و Retry) ---
-def generate_content(news_item):
-    print(f"🤖 AI is analyzing with Gemini...")
-    
-    prompt = f"""
-    You are a professional social media manager.
-    News: "{news_item['title']}"
-    Topic: {news_item['topic']}
-    
-    Task: Write a Twitter post and a LinkedIn post.
-    Output ONLY valid JSON:
-    {{
-        "twitter": "text",
-        "linkedin": "text"
-    }}
-    """
-    
-    for attempt in range(3):
-        try:
-            # استفاده از نام مستعار پایدار که در لیست شما هم بود
-            response = client.models.generate_content(
-                model="gemini-flash-latest", 
-                contents=prompt
-            )
-            
-            clean_text = response.text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[1].split("```")[0]
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0]
-                
-            return json.loads(clean_text)
-            
-        except Exception as e:
-            if "429" in str(e) or "503" in str(e):
-                print(f"⚠️ Server busy or limit hit, retrying in 15s... ({attempt+1}/3)")
-                time.sleep(15)
-            else:
-                print(f"❌ AI Error: {e}")
-                break
+    for entry in feed.entries:
+        if entry.link not in history:
+            return entry # اولین خبر جدید را برمی‌گرداند
     return None
 
-# --- ۳. ارسال به تلگرام ---
-def send_telegram(content, news_item):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    topic_header = news_item['topic'].title()
+# --- ۲. پردازش خبر با هوش مصنوعی Gemini ---
+def generate_content(news_entry):
+    print("🤖 AI is analyzing with Gemini...")
+    client = genai.Client(api_key=GEMINI_API_KEY)
     
-    message_text = (
-        f"<b>📢 Topic: {topic_header}</b>\n\n"
-        f"<b>🐦 Twitter:</b>\n{content.get('twitter')}\n\n"
-        f"<b>💼 LinkedIn:</b>\n{content.get('linkedin')}\n\n"
-        f'<a href="{news_item["link"]}">🔗 Source</a>'
-    )
+    prompt = f"""
+    Analyze this news: {news_entry.title}
+    Link: {news_entry.link}
     
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message_text, "parse_mode": "HTML"}
+    Task: Create a professional summary for immigration and investment interests.
+    Output MUST be in this exact format:
+    TELEGRAM: (A catchy title and 3 bullet points in Persian)
+    X_POST: (A short, engaging English tweet with hashtags, max 240 chars)
+    """
     
     try:
-        res = requests.post(url, json=payload)
-        if res.status_code == 200:
-            print("🚀 Success! Sent to Telegram.")
-        else:
-            print(f"⚠️ Telegram Error: {res.text}")
+        response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+        text = response.text
+        
+        # جدا کردن محتوای تلگرام و توییتر
+        parts = text.split("X_POST:")
+        telegram_part = parts[0].replace("TELEGRAM:", "").strip()
+        x_part = parts[1].strip() if len(parts) > 1 else ""
+        
+        return {"telegram": telegram_part, "x": x_part}
     except Exception as e:
-        print(f"❌ Connection Error: {e}")
+        print(f"❌ Gemini Error: {e}")
+        return None
 
-# --- اجرا ---
+# --- ۳. ارسال به توییتر (X) ---
+def post_to_x(tweet_text):
+    print("🐦 Posting to X (Twitter)...")
+    try:
+        # استفاده از Tweepy برای ارسال پست
+        client_x = tweepy.Client(
+            consumer_key=X_API_KEY,
+            consumer_secret=X_API_SECRET,
+            access_token=X_ACCESS_TOKEN,
+            access_token_secret=X_ACCESS_SECRET
+        )
+        client_x.create_tweet(text=tweet_text)
+        print("✅ Posted to X successfully!")
+    except Exception as e:
+        print(f"❌ X API Error: {e}")
+
+# --- ۴. ارسال به تلگرام ---
+def send_telegram(text, link):
+    print("📢 Sending to Telegram...")
+    message = f"{text}\n\n🔗 Source: {link}"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"})
+
+# --- ۵. ذخیره در تاریخچه ---
+def save_history(link):
+    with open("history.txt", "a") as f:
+        f.write(link + "\n")
+
+# --- اجرای اصلی ---
 if __name__ == "__main__":
     news = get_news()
     if news:
-        ai_result = generate_content(news)
-        if ai_result:
-            send_telegram(ai_result, news)
-            save_to_history(news['link'])
-            print("💾 Done.")
-        else:
-            print("❌ AI failed.")
+        ai_content = generate_content(news)
+        if ai_content:
+            # ارسال به تلگرام
+            send_telegram(ai_content['telegram'], news.link)
+            
+            # ارسال به توییتر
+            if ai_content['x']:
+                post_to_x(ai_content['x'])
+            
+            # ذخیره لینک
+            save_history(news.link)
+            print("💾 Done! Everything synchronized.")
     else:
-        print("😴 No news.")
+        print("☕ No new news found.")
