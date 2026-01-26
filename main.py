@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# کلیدها
+# keys
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -36,10 +36,10 @@ def generate_content(news_entry):
     print("🦙 AI is analyzing with Llama 3.3 (Groq)...")
     client = Groq(api_key=GROQ_API_KEY)
     
-    prompt = f"Summarize this news: {news_entry.title}. Link: {news_entry.link}. Format your response EXACTLY like this:\nTELEGRAM: (Persian summary with emojis)\nX_POST: (Short English tweet with hashtags)"
+    prompt = f"Summarize this news: {news_entry.title}. Link: {news_entry.link}. Format your response EXACTLY like this:\nTELEGRAM: (English summary with emojis)\nX_POST: (Short English tweet with hashtags)"
     
     try:
-        # استفاده از مدل فوق‌سریع Llama 3.3
+        # using Llama 3.3
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}]

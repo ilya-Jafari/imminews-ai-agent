@@ -2,8 +2,8 @@ name: Migration Bot Auto-Run
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # هر ۶ ساعت یک‌بار
-  workflow_dispatch: # قابلیت اجرای دستی
+    - cron: '0 */6 * * *' 
+  workflow_dispatch: 
 
 jobs:
   build:
