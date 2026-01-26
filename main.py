@@ -57,7 +57,12 @@ def generate_content(news_entry):
 
 def post_to_x(tweet_text):
     try:
-        client_x = tweepy.Client(X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET)
+        client_x = tweepy.Client(
+            consumer_key=X_API_KEY,
+            consumer_secret=X_API_SECRET,
+            access_token=X_ACCESS_TOKEN,
+            access_token_secret=X_ACCESS_SECRET
+        )
         client_x.create_tweet(text=tweet_text)
         print("✅ Posted to X!")
     except Exception as e:
