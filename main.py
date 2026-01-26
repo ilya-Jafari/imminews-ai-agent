@@ -2,13 +2,13 @@ import os
 import feedparser
 import requests
 import tweepy
-from google import genai
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # کلیدها
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 X_API_KEY = os.environ.get("X_API_KEY")
@@ -17,8 +17,8 @@ X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN")
 X_ACCESS_SECRET = os.environ.get("X_ACCESS_SECRET")
 
 def get_news():
-    print("🌍 Scanning Google News...")
-    rss_url = "https://news.google.com/rss/search?q=schengen+visa+rules+2026+OR+european+residency+investment&hl=en-US&gl=US&ceid=US:en"
+    print("🌍 Scanning News...")
+    rss_url = "https://news.google.com/rss/search?q=schengen+visa+rules+2026&hl=en-US&gl=US&ceid=US:en"
     feed = feedparser.parse(rss_url)
     
     if os.path.exists("history.txt"):
@@ -33,26 +33,27 @@ def get_news():
     return None
 
 def generate_content(news_entry):
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    prompt = f"Summarize this news for Telegram (Persian) and X (English): {news_entry.title}. Link: {news_entry.link}. Format: TELEGRAM: ... X_POST: ..."
+    print("🦙 AI is analyzing with Llama 3.3 (Groq)...")
+    client = Groq(api_key=GROQ_API_KEY)
     
-    # تست مدل‌های مختلف به ترتیب اولویت برای فرار از ارور 404 و 429
-    for model_name in ["gemini-1.5-flash", "gemini-1.5-pro"]:
-        try:
-            print(f"🤖 Trying model: {model_name}...")
-            response = client.models.generate_content(model=model_name, contents=prompt)
-            text = response.text
-            
-            if "X_POST:" in text:
-                parts = text.split("X_POST:")
-                return {"telegram": parts[0].replace("TELEGRAM:", "").strip(), "x": parts[1].strip()}
-            return {"telegram": text, "x": ""}
-        except Exception as e:
-            print(f"⚠️ {model_name} failed: {e}")
-            continue # رفتن به مدل بعدی
-            
-    print("❌ All models failed.")
-    return None
+    prompt = f"Summarize this news: {news_entry.title}. Link: {news_entry.link}. Format your response EXACTLY like this:\nTELEGRAM: (Persian summary with emojis)\nX_POST: (Short English tweet with hashtags)"
+    
+    try:
+        # استفاده از مدل فوق‌سریع Llama 3.3
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        text = completion.choices[0].message.content
+        
+        parts = text.split("X_POST:")
+        return {
+            "telegram": parts[0].replace("TELEGRAM:", "").strip(),
+            "x": parts[1].strip() if len(parts) > 1 else ""
+        }
+    except Exception as e:
+        print(f"❌ Groq Error: {e}")
+        return None
 
 def post_to_x(tweet_text):
     try:

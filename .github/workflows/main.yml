@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade google-genai feedparser requests python-dotenv tweepy
+          pip install groq feedparser requests python-dotenv tweepy
 
       - name: Run Migration Bot
         env:
